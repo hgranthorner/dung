@@ -14,6 +14,10 @@ typedef struct {
   float x, y, z, w;
 } Vector4f;
 
+typedef struct {
+  float x, y, z, r, g, b, a;
+} VectorInput;
+
 const int SCREEN_WIDTH = 640;
 const int SCREEN_HEIGHT = 480;
 const int SCREEN_FPS = 60;
@@ -29,18 +33,18 @@ const SDL_FColor COLOR_YELLOW = (SDL_FColor){1.0f, 1.0f, 0.0f, 1.0f};
 const SDL_FColor COLOR_PINK = (SDL_FColor){1.0f, 0.0f, 1.0f, 1.0f};
 
 #define NUM_VERTICES 4
-const Vector4f VERTICES[NUM_VERTICES] = {
-    {.x = -0.5, .y = -0.5, .z = 0, .w = 1},
-    {.x = -0.5, .y = 0.5, .z = 0, .w = 1},
-    {.x = 0.5, .y = -0.5, .z = 0, .w = 1},
-    {.x = 0.5, .y = -0.5, .z = 0, .w = 1},
+const VectorInput VERTICES[NUM_VERTICES] = {
+    {.x = -0.5, .y = -0.5, .z = 0, .r = 1.0, .g = 0.0, .b = 0.0, .a = 1.0},
+    {.x = -0.5, .y = 0.5, .z = 0, .r = 1.0, .g = 0.0, .b = 0.0, .a = 1.0},
+    {.x = 0.5, .y = -0.5, .z = 0, .r = 1.0, .g = 0.0, .b = 0.0, .a = 1.0},
+    {.x = 0.5, .y = 0.5, .z = 0, .r = 1.0, .g = 0.0, .b = 0.0, .a = 1.0},
 };
 const size_t VERTICES_SIZE = sizeof(Vector4f) * NUM_VERTICES;
 
 #define NUM_INDICES 6
-const uint32_t INDICES[NUM_INDICES] = {
+const uint16_t INDICES[NUM_INDICES] = {
     0, 1, 2, //
-    1, 4, 2  //
+    1, 3, 2  //
 };
 const size_t INDICES_SIZE = sizeof(INDICES) * NUM_INDICES;
 
@@ -231,7 +235,7 @@ int main() {
                                          .size = INDICES_SIZE});
   CHECK(index_buffer);
 
-  // load static triangle to gpu
+  // load static data to gpu
   {
     SDL_GPUTransferBuffer *vertex_transfer = SDL_CreateGPUTransferBuffer(
         device, &(SDL_GPUTransferBufferCreateInfo){
@@ -285,7 +289,7 @@ int main() {
   }
   free(vertex_data);
 
-  uint32_t *indices_data = malloc(INDICES_SIZE);
+  uint16_t *indices_data = malloc(INDICES_SIZE);
   map_buffer(device, index_buffer, indices_data, INDICES_SIZE);
   for (size_t i = 0; i < NUM_INDICES; i++) {
     printf("Index #%zu: %d\n", i, indices_data[i]);
@@ -361,9 +365,10 @@ int main() {
       SDL_BindGPUIndexBuffer(
           render_pass,
           &(SDL_GPUBufferBinding){.buffer = index_buffer, .offset = 0},
-          SDL_GPU_INDEXELEMENTSIZE_32BIT);
-      // SDL_DrawGPUIndexedPrimitives(render_pass, 3, 7, 0, 0, 0);
-      SDL_DrawGPUPrimitives(render_pass, 3, 1, 0, 0);
+          SDL_GPU_INDEXELEMENTSIZE_16BIT);
+      // SDL_DrawGPUIndexedPrimitives(render_pass, 3, 2, 0, 0, 0);
+      SDL_DrawGPUIndexedPrimitives(render_pass, 6, 1, 0, 0, 0);
+      // SDL_DrawGPUPrimitives(render_pass, 3, 1, 0, 0);
       SDL_EndGPURenderPass(render_pass);
 
       CHECK(SDL_SubmitGPUCommandBuffer(cmdbuf));
