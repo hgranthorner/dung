@@ -10,7 +10,12 @@ FetchContent_Declare(
 	URL https://github.com/libsdl-org/SDL/releases/download/release-3.2.8/SDL3-3.2.8.tar.gz
 )
 
-FetchContent_MakeAvailable(sdl3)
+FetchContent_Declare(
+	cglm
+	URL https://github.com/recp/cglm/archive/refs/tags/v0.9.6.tar.gz
+)
+
+FetchContent_MakeAvailable(sdl3 cglm)
 
 add_executable(${PROJECT_NAME} src/main.c)
-target_link_libraries(${PROJECT_NAME} PRIVATE SDL3::SDL3)
+target_link_libraries(${PROJECT_NAME} PRIVATE SDL3::SDL3 cglm)

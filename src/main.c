@@ -1,7 +1,10 @@
 #include "SDL3/SDL_gpu.h"
+#include "cglm/types.h"
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
+
+#include <cglm/cglm.h>
 
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_video.h>
@@ -15,7 +18,7 @@ typedef struct {
 } Vector4f;
 
 typedef struct {
-  float x, y, z, r, g, b, a;
+  vec4 position, color;
 } VectorInput;
 
 const int SCREEN_WIDTH = 640;
@@ -32,21 +35,21 @@ const SDL_FColor COLOR_CYAN = (SDL_FColor){0.0f, 1.0f, 1.0f, 1.0f};
 const SDL_FColor COLOR_YELLOW = (SDL_FColor){1.0f, 1.0f, 0.0f, 1.0f};
 const SDL_FColor COLOR_PINK = (SDL_FColor){1.0f, 0.0f, 1.0f, 1.0f};
 
-#define NUM_VERTICES 4
-const VectorInput VERTICES[NUM_VERTICES] = {
-    {.x = -0.5, .y = -0.5, .z = 0, .r = 1.0, .g = 0.0, .b = 0.0, .a = 1.0},
-    {.x = -0.5, .y = 0.5, .z = 0, .r = 1.0, .g = 0.0, .b = 0.0, .a = 1.0},
-    {.x = 0.5, .y = -0.5, .z = 0, .r = 1.0, .g = 0.0, .b = 0.0, .a = 1.0},
-    {.x = 0.5, .y = 0.5, .z = 0, .r = 1.0, .g = 0.0, .b = 0.0, .a = 1.0},
+const VectorInput Vertices[] = {
+    {{-0.5, -0.5, 0, 1.0}, {1.0, 0.0, 0.0, 1.0}},
+    {{-0.5, 0.5, 0, 1.0}, {0.0, 1.0, 0.0, 1.0}},
+    {{0.5, -0.5, 0, 1.0}, {0.0, 0.0, 1.0, 1.0}},
+    {{0.5, 0.5, 0, 1.0}, {0.0, 0.0, 0.0, 1.0}},
 };
-const size_t VERTICES_SIZE = sizeof(Vector4f) * NUM_VERTICES;
+const size_t VerticesCount = sizeof(Vertices) / sizeof(VectorInput);
+const size_t VerticesSize = sizeof(Vertices);
 
-#define NUM_INDICES 6
-const uint16_t INDICES[NUM_INDICES] = {
+const uint16_t Indices[] = {
     0, 1, 2, //
     1, 3, 2  //
 };
-const size_t INDICES_SIZE = sizeof(INDICES) * NUM_INDICES;
+const size_t IndicesCount = sizeof(Indices) / sizeof(uint16_t);
+const size_t IndicesSize = sizeof(Indices);
 
 #define CHECK(x)                                                               \
   do {                                                                         \
@@ -77,12 +80,12 @@ void map_buffer(SDL_GPUDevice *device, SDL_GPUBuffer *buffer, void *dest,
       SDL_SubmitGPUCommandBufferAndAcquireFence(download_cmdbuf);
   CHECK(fence);
 
-  while (!SDL_QueryGPUFence(device, fence)) {
-  };
+  while (!SDL_QueryGPUFence(device, fence))
+    ;
 
   SDL_ReleaseGPUFence(device, fence);
 
-  Vector4f *transfer_data =
+  VectorInput *transfer_data =
       SDL_MapGPUTransferBuffer(device, transfer_buffer, false);
 
   memcpy(dest, transfer_data, size);
@@ -91,69 +94,81 @@ void map_buffer(SDL_GPUDevice *device, SDL_GPUBuffer *buffer, void *dest,
   SDL_ReleaseGPUTransferBuffer(device, transfer_buffer);
 }
 
-SDL_GPUShader *load_shader(SDL_GPUDevice *device, const char *filename,
-                           SDL_GPUShaderStage stage, Uint32 sampler_count,
-                           Uint32 uniform_buffer_count,
-                           Uint32 storage_buffer_count,
-                           Uint32 storage_texture_count) {
+void load_shaders(SDL_GPUDevice *device, const char *filename,
+                  SDL_GPUShader **dest) {
 
   if (!SDL_GetPathInfo(filename, NULL)) {
     fprintf(stdout, "File (%s) does not exist.\n", filename);
-    return NULL;
+    exit(1);
   }
 
-  const char *entrypoint;
   SDL_GPUShaderFormat backend_formats = SDL_GetGPUShaderFormats(device);
   SDL_GPUShaderFormat format = SDL_GPU_SHADERFORMAT_MSL;
-  if (stage == SDL_GPU_SHADERSTAGE_FRAGMENT) {
-    entrypoint = "fragmentShader";
-  } else if (stage == SDL_GPU_SHADERSTAGE_VERTEX) {
-    entrypoint = "vertexShader";
-  }
 
   size_t code_size;
   void *code = SDL_LoadFile(filename, &code_size);
   if (code == NULL) {
     fprintf(stderr, "ERROR: SDL_LoadFile(%s) failed: %s\n", filename,
             SDL_GetError());
-    return NULL;
+    exit(1);
   }
 
-  SDL_GPUShaderCreateInfo shader_info = {
+  SDL_GPUShaderCreateInfo vertex_info = {
       .code = code,
       .code_size = code_size,
-      .entrypoint = entrypoint,
+      .entrypoint = "vertexShader",
       .format = format,
-      .stage = stage,
-      .num_samplers = sampler_count,
-      .num_uniform_buffers = uniform_buffer_count,
-      .num_storage_buffers = storage_buffer_count,
-      .num_storage_textures = storage_texture_count,
+      .stage = SDL_GPU_SHADERSTAGE_VERTEX,
+      .num_samplers = 0,
+      .num_uniform_buffers = 0,
+      .num_storage_buffers = 0,
+      .num_storage_textures = 0,
   };
-
-  SDL_GPUShader *shader = SDL_CreateGPUShader(device, &shader_info);
+  SDL_GPUShader *shader = SDL_CreateGPUShader(device, &vertex_info);
 
   if (shader == NULL) {
     fprintf(stderr, "ERROR: SDL_CreateGPUShader failed: %s\n", SDL_GetError());
     SDL_free(code);
-    return NULL;
+    exit(1);
   }
+  dest[0] = shader;
+
+  SDL_GPUShaderCreateInfo fragment_info = {
+      .code = code,
+      .code_size = code_size,
+      .entrypoint = "fragmentShader",
+      .format = format,
+      .stage = SDL_GPU_SHADERSTAGE_FRAGMENT,
+      .num_samplers = 0,
+      .num_uniform_buffers = 0,
+      .num_storage_buffers = 0,
+      .num_storage_textures = 0,
+  };
+  shader = SDL_CreateGPUShader(device, &fragment_info);
+
+  if (shader == NULL) {
+    fprintf(stderr, "ERROR: SDL_CreateGPUShader failed: %s\n", SDL_GetError());
+    SDL_free(code);
+    exit(1);
+  }
+  dest[1] = shader;
+
   SDL_free(code);
-  return shader;
 }
 
 int main() {
-
   if (!SDL_Init(SDL_INIT_VIDEO)) {
     fprintf(stderr, "Failed to init video! %s", SDL_GetError());
     return 1;
   };
 
+  printf("VerticesCount: %zu; VerticesSize: %zu; IndicesCount: %zu; "
+         "IndicesSize: %zu"
+         "\n",
+         VerticesCount, VerticesSize, IndicesCount, IndicesSize);
+
   SDL_Window *window = NULL;
-  // SDL_Renderer *renderer = NULL;
   if (!(window = SDL_CreateWindow("Dung", SCREEN_WIDTH, SCREEN_HEIGHT, 0))) {
-    // if (!SDL_CreateWindowAndRenderer("Dung", SCREEN_WIDTH, SCREEN_HEIGHT, 0,
-    //                                  &window, &renderer)) {
     fprintf(stderr, "Failed to create window! %s", SDL_GetError());
     return 1;
   }
@@ -168,13 +183,10 @@ int main() {
 
   CHECK(SDL_ClaimWindowForGPUDevice(device, window));
 
-  SDL_GPUShader *vert_shader = load_shader(
-      device, "src/vert.metal", SDL_GPU_SHADERSTAGE_VERTEX, 0, 0, 0, 0);
-  CHECK(vert_shader);
-
-  SDL_GPUShader *frag_shader = load_shader(
-      device, "src/frag.metal", SDL_GPU_SHADERSTAGE_FRAGMENT, 0, 0, 0, 0);
-  CHECK(frag_shader);
+  SDL_GPUShader *shaders[2] = {0};
+  load_shaders(device, "src/shader.metal", shaders);
+  SDL_GPUShader *vert_shader = shaders[0];
+  SDL_GPUShader *frag_shader = shaders[1];
 
   SDL_GPUGraphicsPipelineCreateInfo pipeline_info = {
       .target_info =
@@ -194,7 +206,7 @@ int main() {
                   (SDL_GPUVertexBufferDescription[]){
                       {
                           .slot = 0,
-                          .pitch = sizeof(Vector4f),
+                          .pitch = sizeof(VectorInput),
                           .input_rate = SDL_GPU_VERTEXINPUTRATE_VERTEX,
                           .instance_step_rate = 0,
                       },
@@ -208,12 +220,19 @@ int main() {
                           .format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT4,
                           .offset = 0,
                       },
+                      {
+                          .location = 1,
+                          .buffer_slot = 0,
+                          .format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT4,
+                          .offset = sizeof(vec4),
+                      },
                   },
-              .num_vertex_attributes = 1,
+              .num_vertex_attributes = 2,
           },
       .rasterizer_state =
           (SDL_GPURasterizerState){
-              .cull_mode = SDL_GPU_CULLMODE_NONE,
+              .cull_mode = SDL_GPU_CULLMODE_BACK,
+              .front_face = SDL_GPU_FRONTFACE_CLOCKWISE,
               .fill_mode = SDL_GPU_FILLMODE_FILL,
           },
   };
@@ -227,71 +246,73 @@ int main() {
 
   SDL_GPUBuffer *vertex_buffer = SDL_CreateGPUBuffer(
       device, &(SDL_GPUBufferCreateInfo){.usage = SDL_GPU_BUFFERUSAGE_VERTEX,
-                                         .size = VERTICES_SIZE});
+                                         .size = VerticesSize});
   CHECK(vertex_buffer);
 
   SDL_GPUBuffer *index_buffer = SDL_CreateGPUBuffer(
       device, &(SDL_GPUBufferCreateInfo){.usage = SDL_GPU_BUFFERUSAGE_INDEX,
-                                         .size = INDICES_SIZE});
+                                         .size = IndicesSize});
   CHECK(index_buffer);
 
   // load static data to gpu
   {
-    SDL_GPUTransferBuffer *vertex_transfer = SDL_CreateGPUTransferBuffer(
+    SDL_GPUTransferBuffer *transfer = SDL_CreateGPUTransferBuffer(
         device, &(SDL_GPUTransferBufferCreateInfo){
                     .usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD,
-                    .size = sizeof(Vector4f) * 3,
+                    .size = VerticesSize + IndicesSize,
                 });
-    Vector4f *vertex_data =
-        SDL_MapGPUTransferBuffer(device, vertex_transfer, false);
-    memcpy(vertex_data, VERTICES, VERTICES_SIZE);
-    SDL_UnmapGPUTransferBuffer(device, vertex_transfer);
-
-    SDL_GPUTransferBuffer *index_transfer = SDL_CreateGPUTransferBuffer(
-        device, &(SDL_GPUTransferBufferCreateInfo){
-                    .usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD,
-                    .size = INDICES_SIZE,
-                });
-    Vector4f *index_data =
-        SDL_MapGPUTransferBuffer(device, index_transfer, false);
-    memcpy(index_data, INDICES, INDICES_SIZE);
-    SDL_UnmapGPUTransferBuffer(device, index_transfer);
+    VectorInput *vertex_data =
+        SDL_MapGPUTransferBuffer(device, transfer, false);
+    memcpy(vertex_data, Vertices, VerticesSize);
+    uint16_t *index_data = (uint16_t *)&vertex_data[VerticesCount];
+    memcpy(index_data, Indices, IndicesSize);
+    SDL_UnmapGPUTransferBuffer(device, transfer);
 
     SDL_GPUCommandBuffer *upload_cmdbuf = SDL_AcquireGPUCommandBuffer(device);
     SDL_GPUCopyPass *copy_pass = SDL_BeginGPUCopyPass(upload_cmdbuf);
 
     SDL_UploadToGPUBuffer(copy_pass,
                           &(SDL_GPUTransferBufferLocation){
-                              .transfer_buffer = vertex_transfer, .offset = 0},
+                              .transfer_buffer = transfer, .offset = 0},
                           &(SDL_GPUBufferRegion){.buffer = vertex_buffer,
                                                  .offset = 0,
-                                                 .size = VERTICES_SIZE},
+                                                 .size = VerticesSize},
                           false);
 
     SDL_UploadToGPUBuffer(copy_pass,
                           &(SDL_GPUTransferBufferLocation){
-                              .transfer_buffer = index_transfer, .offset = 0},
-                          &(SDL_GPUBufferRegion){.buffer = index_buffer,
-                                                 .offset = 0,
-                                                 .size = INDICES_SIZE},
+                              .transfer_buffer = transfer,
+                              .offset = VerticesSize,
+                          },
+                          &(SDL_GPUBufferRegion){
+                              .buffer = index_buffer,
+                              .offset = 0,
+                              .size = IndicesSize,
+                          },
                           false);
 
     SDL_EndGPUCopyPass(copy_pass);
-    SDL_SubmitGPUCommandBuffer(upload_cmdbuf);
-    SDL_ReleaseGPUTransferBuffer(device, vertex_transfer);
-    SDL_ReleaseGPUTransferBuffer(device, index_transfer);
+    SDL_GPUFence *fence =
+        SDL_SubmitGPUCommandBufferAndAcquireFence(upload_cmdbuf);
+    SDL_ReleaseGPUTransferBuffer(device, transfer);
+
+    while (!SDL_QueryGPUFence(device, fence))
+      ;
+
+    SDL_ReleaseGPUFence(device, fence);
   }
 
-  Vector4f *vertex_data = malloc(VERTICES_SIZE);
-  map_buffer(device, vertex_buffer, vertex_data, VERTICES_SIZE);
-  for (size_t i = 0; i < NUM_VERTICES; i++) {
-    printf("Vertex #%zu: x=%f, y=%f\n", i, vertex_data[i].x, vertex_data[i].y);
+  VectorInput *vertex_data = malloc(VerticesSize);
+  map_buffer(device, vertex_buffer, vertex_data, VerticesSize);
+  for (size_t i = 0; i < VerticesCount; i++) {
+    printf("Vertex #%zu: x=%f, y=%f\n", i, vertex_data[i].position[0],
+           vertex_data[i].position[1]);
   }
   free(vertex_data);
 
-  uint16_t *indices_data = malloc(INDICES_SIZE);
-  map_buffer(device, index_buffer, indices_data, INDICES_SIZE);
-  for (size_t i = 0; i < NUM_INDICES; i++) {
+  uint16_t *indices_data = malloc(IndicesSize);
+  map_buffer(device, index_buffer, indices_data, IndicesSize);
+  for (size_t i = 0; i < IndicesCount; i++) {
     printf("Index #%zu: %d\n", i, indices_data[i]);
   }
   free(indices_data);
@@ -366,9 +387,7 @@ int main() {
           render_pass,
           &(SDL_GPUBufferBinding){.buffer = index_buffer, .offset = 0},
           SDL_GPU_INDEXELEMENTSIZE_16BIT);
-      // SDL_DrawGPUIndexedPrimitives(render_pass, 3, 2, 0, 0, 0);
-      SDL_DrawGPUIndexedPrimitives(render_pass, 6, 1, 0, 0, 0);
-      // SDL_DrawGPUPrimitives(render_pass, 3, 1, 0, 0);
+      SDL_DrawGPUIndexedPrimitives(render_pass, 6, 6, 0, 0, 0);
       SDL_EndGPURenderPass(render_pass);
 
       CHECK(SDL_SubmitGPUCommandBuffer(cmdbuf));
