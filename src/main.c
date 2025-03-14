@@ -1,5 +1,7 @@
 #include "SDL3/SDL_gpu.h"
 #include "SDL3/SDL_scancode.h"
+#include "cglm/io.h"
+#include "cglm/vec3.h"
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -172,6 +174,7 @@ typedef struct {
     vec3 target;
     vec3 up;
     mat4 view;
+
     mat4 perspective;
     mat4 model;
     mat4 mvp;
@@ -371,11 +374,19 @@ int main() {
                     running = false;
                 } break;
                 case SDL_SCANCODE_UP: {
-                    camera.position[2] -= 1;
+                    vec3 dest = {0};
+                    glm_vec3_sub(camera.position, camera.target, dest);
+                    glm_vec3_divs(dest, 10, dest);
+                    glm_vec3_add(camera.position, dest, camera.position);
+                    // camera.position[2] -= 1;
                     camera_set_view(&camera);
                 } break;
                 case SDL_SCANCODE_DOWN: {
-                    camera.position[2] += 1;
+                    vec3 dest = {0};
+                    glm_vec3_sub(camera.position, camera.target, dest);
+                    glm_vec3_divs(dest, 10, dest);
+                    glm_vec3_sub(camera.position, dest, camera.position);
+                    // camera.position[2] += 1;
                     camera_set_view(&camera);
                 } break;
                 case SDL_SCANCODE_LEFT: {
