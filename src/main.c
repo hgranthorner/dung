@@ -1,5 +1,8 @@
 #include "SDL3/SDL_gpu.h"
-#include "cglm/types.h"
+#include "cglm/cam.h"
+#include "cglm/io.h"
+#include "cglm/mat4.h"
+#include "cglm/util.h"
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -8,14 +11,6 @@
 
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_video.h>
-
-typedef struct {
-    float x, y, z;
-} Vector3f;
-
-typedef struct {
-    float x, y, z, w;
-} Vector4f;
 
 typedef struct {
     vec4 position, color;
@@ -36,10 +31,15 @@ const SDL_FColor COLOR_YELLOW = (SDL_FColor){1.0f, 1.0f, 0.0f, 1.0f};
 const SDL_FColor COLOR_PINK = (SDL_FColor){1.0f, 0.0f, 1.0f, 1.0f};
 
 const VectorInput Vertices[] = {
-    {{-0.5, -0.5, 0, 1.0}, {1.0, 0.0, 0.0, 1.0}},
-    {{-0.5, 0.5, 0, 1.0}, {0.0, 1.0, 0.0, 1.0}},
-    {{0.5, -0.5, 0, 1.0}, {0.0, 0.0, 1.0, 1.0}},
-    {{0.5, 0.5, 0, 1.0}, {0.0, 0.0, 0.0, 1.0}},
+
+    // {{-0.5, -0.5, 0, 1.0}, {1.0, 0.0, 0.0, 1.0}},
+    // {{-0.5, 0.5, 0, 1.0}, {0.0, 1.0, 0.0, 1.0}},
+    // {{0.5, -0.5, 0, 1.0}, {0.0, 0.0, 1.0, 1.0}},
+    // {{0.5, 0.5, 0, 1.0}, {0.0, 0.0, 0.0, 1.0}},
+    {{25, 25, 5, 1.0}, {1.0, 0.0, 0.0, 1.0}},
+    {{25, 75, 5, 1.0}, {0.0, 1.0, 0.0, 1.0}},
+    {{75, 25, 5, 1.0}, {0.0, 0.0, 1.0, 1.0}},
+    {{75, 75, 5, 1.0}, {0.0, 0.0, 0.0, 1.0}},
 };
 const size_t VerticesCount = sizeof(Vertices) / sizeof(VectorInput);
 const size_t VerticesSize = sizeof(Vertices);
@@ -114,7 +114,7 @@ void load_shaders(SDL_GPUDevice *device, const char *filename, SDL_GPUShader **d
         .format = format,
         .stage = SDL_GPU_SHADERSTAGE_VERTEX,
         .num_samplers = 0,
-        .num_uniform_buffers = 0,
+        .num_uniform_buffers = 1,
         .num_storage_buffers = 0,
         .num_storage_textures = 0,
     };
@@ -155,7 +155,6 @@ int main() {
         fprintf(stderr, "Failed to init video! %s", SDL_GetError());
         return 1;
     };
-
     printf("VerticesCount: %zu; VerticesSize: %zu; IndicesCount: %zu; "
            "IndicesSize: %zu"
            "\n",
@@ -253,6 +252,7 @@ int main() {
         memcpy(vertex_data, Vertices, VerticesSize);
         uint16_t *index_data = (uint16_t *)&vertex_data[VerticesCount];
         memcpy(index_data, Indices, IndicesSize);
+
         SDL_UnmapGPUTransferBuffer(device, transfer);
 
         SDL_GPUCommandBuffer *upload_cmdbuf = SDL_AcquireGPUCommandBuffer(device);
@@ -300,8 +300,37 @@ int main() {
 
     // finish loading data
 
-    SDL_GPUCommandBuffer *command_buffer = SDL_AcquireGPUCommandBuffer(device);
-    CHECK(command_buffer);
+    mat4 mvp = {0};
+    glm_mat4_identity(mvp);
+    // setup model view projection matrix
+    {
+        // "Flatten" the world using the given scale
+        mat4 ortho = {0};
+        glm_ortho(0, 100, 0, 100, -1, 1, ortho);
+
+        // "Translate" the camera by the translation vector (in reverse)
+        mat4 view = {0};
+        vec3 camera_position = {50, 50, 40};
+        vec3 camera_target = {50, 50, 20};
+        vec3 up = {0, 1, 0};
+        glm_mat4_identity(view);
+        glm_lookat(camera_position, camera_target, up, view);
+        // glm_translate(view, (vec3){0, 0, 0});
+
+        // Translate the world
+        mat4 model = {0};
+        glm_mat4_identity(model);
+        // glm_translate(model, (vec3){0, 0, 0});
+
+        mat4 perspective = {0};
+        glm_mat4_identity(perspective);
+        glm_perspective(glm_rad(90), (float)SCREEN_WIDTH / (float)SCREEN_HEIGHT, 0, 1, perspective);
+
+        glm_mat4_mul(perspective, view, mvp);
+        glm_mat4_mul(mvp, model, mvp);
+    }
+
+    glm_mat4_print(mvp, stdout);
 
     bool running = true;
     SDL_Event e;
@@ -349,17 +378,19 @@ int main() {
 
             SDL_GPUColorTargetInfo color_target_info = {0};
             color_target_info.texture = swapchain_texture;
-            color_target_info.clear_color = COLOR_BLUE;
+            color_target_info.clear_color = COLOR_BLACK;
             color_target_info.load_op = SDL_GPU_LOADOP_CLEAR;
             color_target_info.store_op = SDL_GPU_STOREOP_STORE;
 
             SDL_GPURenderPass *render_pass = SDL_BeginGPURenderPass(cmdbuf, &color_target_info, 1, NULL);
             CHECK(render_pass);
+
+            SDL_PushGPUVertexUniformData(cmdbuf, 0, mvp, sizeof(mat4));
             SDL_BindGPUGraphicsPipeline(render_pass, pipeline);
             SDL_BindGPUVertexBuffers(render_pass, 0, &(SDL_GPUBufferBinding){.buffer = vertex_buffer, .offset = 0}, 1);
             SDL_BindGPUIndexBuffer(render_pass, &(SDL_GPUBufferBinding){.buffer = index_buffer, .offset = 0},
                                    SDL_GPU_INDEXELEMENTSIZE_16BIT);
-            SDL_DrawGPUIndexedPrimitives(render_pass, 6, 6, 0, 0, 0);
+            SDL_DrawGPUIndexedPrimitives(render_pass, 6, 1, 0, 0, 0);
             SDL_EndGPURenderPass(render_pass);
 
             CHECK(SDL_SubmitGPUCommandBuffer(cmdbuf));

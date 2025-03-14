@@ -13,11 +13,13 @@ struct FragmentInput {
 
 // Define a vertex structure that matches your vertex buffer layout.
 // The vertex shader reads the bound vertex buffer and outputs a clip-space position.
-vertex FragmentInput vertexShader(uint vertexId [[vertex_id]],
-                           VertexInput input [[stage_in]]) {
+vertex FragmentInput vertexShader(
+    uint vertexId [[vertex_id]],
+    constant float4x4 *mvp [[buffer(0)]],
+    VertexInput input [[stage_in]]) {
     // Convert the 3D position to a 4D homogeneous coordinate.
     FragmentInput frag = {};
-    frag.position = input.position;
+    frag.position = *mvp * input.position;
     frag.color = input.color;
     return frag;
 }
