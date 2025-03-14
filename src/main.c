@@ -1,8 +1,5 @@
 #include "SDL3/SDL_gpu.h"
-#include "cglm/cam.h"
-#include "cglm/io.h"
-#include "cglm/mat4.h"
-#include "cglm/util.h"
+#include "SDL3/SDL_scancode.h"
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -31,23 +28,43 @@ const SDL_FColor COLOR_YELLOW = (SDL_FColor){1.0f, 1.0f, 0.0f, 1.0f};
 const SDL_FColor COLOR_PINK = (SDL_FColor){1.0f, 0.0f, 1.0f, 1.0f};
 
 const VectorInput Vertices[] = {
+    // 0 fbl
+    {{25, 25, 25, 1.0}, {1.0, 0.0, 0.0, 1.0}},
+    // 1 ftl
+    {{25, 75, 25, 1.0}, {0.0, 1.0, 0.0, 1.0}},
+    // 2 fbr
+    {{75, 25, 25, 1.0}, {0.0, 0.0, 1.0, 1.0}},
+    // 3 ftr
+    {{75, 75, 25, 1.0}, {1.0, 1.0, 0.0, 1.0}},
 
-    // {{-0.5, -0.5, 0, 1.0}, {1.0, 0.0, 0.0, 1.0}},
-    // {{-0.5, 0.5, 0, 1.0}, {0.0, 1.0, 0.0, 1.0}},
-    // {{0.5, -0.5, 0, 1.0}, {0.0, 0.0, 1.0, 1.0}},
-    // {{0.5, 0.5, 0, 1.0}, {0.0, 0.0, 0.0, 1.0}},
-    {{25, 25, 5, 1.0}, {1.0, 0.0, 0.0, 1.0}},
-    {{25, 75, 5, 1.0}, {0.0, 1.0, 0.0, 1.0}},
-    {{75, 25, 5, 1.0}, {0.0, 0.0, 1.0, 1.0}},
-    {{75, 75, 5, 1.0}, {0.0, 0.0, 0.0, 1.0}},
+    // 4 bbr
+    {{25, 25, -25, 1.0}, {1.0, 0.0, 0.0, 1.0}},
+    // 5 btr
+    {{25, 75, -25, 1.0}, {0.0, 1.0, 0.0, 1.0}},
+    // 6 bbl
+    {{75, 25, -25, 1.0}, {0.0, 0.0, 1.0, 1.0}},
+    // 7 btl
+    {{75, 75, -25, 1.0}, {1.0, 1.0, 0.0, 1.0}},
 };
 const size_t VerticesCount = sizeof(Vertices) / sizeof(VectorInput);
 const size_t VerticesSize = sizeof(Vertices);
 
+// clang-format off
 const uint16_t Indices[] = {
-    0, 1, 2, //
-    1, 3, 2  //
+    // front
+    0, 1, 2,
+    1, 3, 2,
+    // right
+    2, 3, 6,
+    3, 7, 6,
+    // left
+    4, 5, 0,
+    5, 1, 0,
+    // back
+    6, 7, 4,
+    7, 5, 4,
 };
+// clang-format on
 const size_t IndicesCount = sizeof(Indices) / sizeof(uint16_t);
 const size_t IndicesSize = sizeof(Indices);
 
@@ -148,6 +165,22 @@ void load_shaders(SDL_GPUDevice *device, const char *filename, SDL_GPUShader **d
     dest[1] = shader;
 
     SDL_free(code);
+}
+
+typedef struct {
+    vec3 position;
+    vec3 target;
+    vec3 up;
+    mat4 view;
+    mat4 perspective;
+    mat4 model;
+    mat4 mvp;
+} Camera;
+
+void camera_set_view(Camera *camera) {
+    glm_lookat(camera->position, camera->target, camera->up, camera->view);
+    glm_mat4_mul(camera->perspective, camera->view, camera->mvp);
+    glm_mat4_mul(camera->mvp, camera->model, camera->mvp);
 }
 
 int main() {
@@ -300,8 +333,8 @@ int main() {
 
     // finish loading data
 
-    mat4 mvp = {0};
-    glm_mat4_identity(mvp);
+    Camera camera = {0};
+    glm_mat4_identity(camera.mvp);
     // setup model view projection matrix
     {
         // "Flatten" the world using the given scale
@@ -309,28 +342,21 @@ int main() {
         glm_ortho(0, 100, 0, 100, -1, 1, ortho);
 
         // "Translate" the camera by the translation vector (in reverse)
-        mat4 view = {0};
-        vec3 camera_position = {50, 50, 40};
-        vec3 camera_target = {50, 50, 20};
-        vec3 up = {0, 1, 0};
-        glm_mat4_identity(view);
-        glm_lookat(camera_position, camera_target, up, view);
-        // glm_translate(view, (vec3){0, 0, 0});
+        glm_vec3_copy((vec3){30, 50, 50}, camera.position);
+        glm_vec3_copy((vec3){50, 50, 1}, camera.target);
+        glm_vec3_copy((vec3){0, 1, 0}, camera.up);
+        glm_mat4_identity(camera.view);
+        glm_lookat(camera.position, camera.target, camera.up, camera.view);
 
-        // Translate the world
-        mat4 model = {0};
-        glm_mat4_identity(model);
-        // glm_translate(model, (vec3){0, 0, 0});
+        glm_mat4_identity(camera.model);
+        glm_translate(camera.model, (vec3){0, 0, 0});
 
-        mat4 perspective = {0};
-        glm_mat4_identity(perspective);
-        glm_perspective(glm_rad(90), (float)SCREEN_WIDTH / (float)SCREEN_HEIGHT, 0, 1, perspective);
+        glm_mat4_identity(camera.perspective);
+        glm_perspective(glm_rad(90), (float)SCREEN_WIDTH / (float)SCREEN_HEIGHT, 0, 1, camera.perspective);
 
-        glm_mat4_mul(perspective, view, mvp);
-        glm_mat4_mul(mvp, model, mvp);
+        glm_mat4_mul(camera.perspective, camera.view, camera.mvp);
+        glm_mat4_mul(camera.mvp, camera.model, camera.mvp);
     }
-
-    glm_mat4_print(mvp, stdout);
 
     bool running = true;
     SDL_Event e;
@@ -343,6 +369,22 @@ int main() {
                 switch (e.key.scancode) {
                 case SDL_SCANCODE_ESCAPE: {
                     running = false;
+                } break;
+                case SDL_SCANCODE_UP: {
+                    camera.position[2] -= 1;
+                    camera_set_view(&camera);
+                } break;
+                case SDL_SCANCODE_DOWN: {
+                    camera.position[2] += 1;
+                    camera_set_view(&camera);
+                } break;
+                case SDL_SCANCODE_LEFT: {
+                    camera.position[0] -= 1;
+                    camera_set_view(&camera);
+                } break;
+                case SDL_SCANCODE_RIGHT: {
+                    camera.position[0] += 1;
+                    camera_set_view(&camera);
                 } break;
                 default:
                     continue;
@@ -385,12 +427,12 @@ int main() {
             SDL_GPURenderPass *render_pass = SDL_BeginGPURenderPass(cmdbuf, &color_target_info, 1, NULL);
             CHECK(render_pass);
 
-            SDL_PushGPUVertexUniformData(cmdbuf, 0, mvp, sizeof(mat4));
+            SDL_PushGPUVertexUniformData(cmdbuf, 0, camera.mvp, sizeof(mat4));
             SDL_BindGPUGraphicsPipeline(render_pass, pipeline);
             SDL_BindGPUVertexBuffers(render_pass, 0, &(SDL_GPUBufferBinding){.buffer = vertex_buffer, .offset = 0}, 1);
             SDL_BindGPUIndexBuffer(render_pass, &(SDL_GPUBufferBinding){.buffer = index_buffer, .offset = 0},
                                    SDL_GPU_INDEXELEMENTSIZE_16BIT);
-            SDL_DrawGPUIndexedPrimitives(render_pass, 6, 1, 0, 0, 0);
+            SDL_DrawGPUIndexedPrimitives(render_pass, IndicesCount, IndicesCount, 0, 0, 0);
             SDL_EndGPURenderPass(render_pass);
 
             CHECK(SDL_SubmitGPUCommandBuffer(cmdbuf));
