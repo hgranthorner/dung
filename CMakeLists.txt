@@ -22,5 +22,6 @@ add_executable(${PROJECT_NAME}
 	src/sdl_utils.c
 	src/constants.c
 	src/camera.c
+	src/pipeline.c
 )
 target_link_libraries(${PROJECT_NAME} PRIVATE SDL3::SDL3 cglm)

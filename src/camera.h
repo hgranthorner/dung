@@ -14,8 +14,10 @@ typedef struct {
 } Camera;
 
 typedef enum { CAMERA_DIRECTION_LEFT, CAMERA_DIRECTION_RIGHT } CameraDirection;
+typedef enum { CAMERA_ZOOM_IN, CAMERA_ZOOM_OUT } CameraZoom;
 
 void camera_set_view(Camera *camera);
 void camera_init(Camera *camera);
 void camera_rotate_around_point(Camera *camera, vec3 point, CameraDirection rotation, float amount);
 void camera_strafe(Camera *camera, CameraDirection rotation, float amount);
+void camera_zoom(Camera *camera, CameraZoom zoom, float amount);

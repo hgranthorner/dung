@@ -75,3 +75,18 @@ void camera_strafe(Camera *camera, CameraDirection rotation, float amount) {
     }
     camera_set_view(camera);
 }
+
+void camera_zoom(Camera *camera, CameraZoom zoom, float amount) {
+    vec3 dest = {0};
+    glm_vec3_sub(camera->position, camera->target, dest);
+    glm_vec3_divs(dest, 10, dest);
+    switch (zoom) {
+    case CAMERA_ZOOM_IN: {
+        glm_vec3_add(camera->position, dest, camera->position);
+    } break;
+    case CAMERA_ZOOM_OUT: {
+        glm_vec3_sub(camera->position, dest, camera->position);
+    } break;
+    }
+    camera_set_view(camera);
+}

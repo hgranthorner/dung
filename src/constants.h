@@ -18,7 +18,8 @@ const SDL_FColor COLOR_PINK;
 
 #define CHECK(x)                                                                                                       \
     do {                                                                                                               \
-        if (!x) {                                                                                                      \
+        void *foobar = (void *)x;                                                                                      \
+        if (!foobar || (void *)foobar == NULL) {                                                                       \
             fprintf(stderr, "SDL Error: %s", SDL_GetError());                                                          \
             exit(1);                                                                                                   \
         }                                                                                                              \
