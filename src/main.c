@@ -56,9 +56,28 @@ int main() {
     bool running = true;
     SDL_Event e;
     uint64_t now, previous, last_frame_time = SDL_GetTicks();
+    const bool *keyboard_state = SDL_GetKeyboardState(NULL);
 
     while (running) {
         uint64_t ts = now - previous;
+
+        if (keyboard_state[SDL_SCANCODE_D])
+            camera_rotate_around_point(&camera, camera.target, CAMERA_DIRECTION_RIGHT, ts);
+
+        if (keyboard_state[SDL_SCANCODE_A])
+            camera_rotate_around_point(&camera, camera.target, CAMERA_DIRECTION_LEFT, ts);
+
+        if (keyboard_state[SDL_SCANCODE_S] || keyboard_state[SDL_SCANCODE_DOWN])
+            camera_zoom(&camera, CAMERA_ZOOM_IN, ts);
+
+        if (keyboard_state[SDL_SCANCODE_W] || keyboard_state[SDL_SCANCODE_UP])
+            camera_zoom(&camera, CAMERA_ZOOM_OUT, ts);
+
+        if (keyboard_state[SDL_SCANCODE_Q])
+            camera_strafe(&camera, CAMERA_DIRECTION_LEFT, ts);
+
+        if (keyboard_state[SDL_SCANCODE_E])
+            camera_strafe(&camera, CAMERA_DIRECTION_RIGHT, ts);
 
         while (SDL_PollEvent(&e)) {
             switch (e.type) {
@@ -66,32 +85,6 @@ int main() {
                 switch (e.key.scancode) {
                 case SDL_SCANCODE_ESCAPE: {
                     running = false;
-                } break;
-
-                case SDL_SCANCODE_W:
-                case SDL_SCANCODE_UP: {
-                    camera_zoom(&camera, CAMERA_ZOOM_OUT, ts);
-                } break;
-
-                case SDL_SCANCODE_S:
-                case SDL_SCANCODE_DOWN: {
-                    camera_zoom(&camera, CAMERA_ZOOM_IN, ts);
-                } break;
-
-                case SDL_SCANCODE_A: {
-                    camera_rotate_around_point(&camera, camera.target, CAMERA_DIRECTION_LEFT, ts);
-                } break;
-
-                case SDL_SCANCODE_D: {
-                    camera_rotate_around_point(&camera, camera.target, CAMERA_DIRECTION_RIGHT, ts);
-                } break;
-
-                case SDL_SCANCODE_Q: {
-                    camera_strafe(&camera, CAMERA_DIRECTION_LEFT, ts);
-                } break;
-
-                case SDL_SCANCODE_E: {
-                    camera_strafe(&camera, CAMERA_DIRECTION_RIGHT, ts);
                 } break;
 
                 default:
