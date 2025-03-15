@@ -17,5 +17,10 @@ FetchContent_Declare(
 
 FetchContent_MakeAvailable(sdl3 cglm)
 
-add_executable(${PROJECT_NAME} src/main.c)
+add_executable(${PROJECT_NAME} 
+	src/main.c
+	src/sdl_utils.c
+	src/constants.c
+	src/camera.c
+)
 target_link_libraries(${PROJECT_NAME} PRIVATE SDL3::SDL3 cglm)
