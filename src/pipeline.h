@@ -12,16 +12,11 @@ typedef struct {
     SDL_GPUGraphicsPipeline *pipeline;
     SDL_GPUBuffer *vertex_buffer;
     SDL_GPUBuffer *index_buffer;
+    VectorInput *vertices;
+    size_t vertices_count;
+    uint16_t *indices;
+    size_t indices_count;
 } Pipeline;
 
-const VectorInput Vertices[8];
-const size_t VerticesCount;
-const size_t VerticesSize;
-
-// clang-format off
-const uint16_t Indices[24];
-// clang-format on
-const size_t IndicesCount;
-const size_t IndicesSize;
-
-void renderer_init(Pipeline *pipeline, SDL_Window *window, SDL_GPUDevice *device);
+void cube_pipeline_init(Pipeline *pipeline, SDL_Window *window, SDL_GPUDevice *device);
+void floor_tile_pipeline_init(Pipeline *pipeline, SDL_Window *window, SDL_GPUDevice *device);

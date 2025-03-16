@@ -1,7 +1,9 @@
 cmake_minimum_required(VERSION 3.30)
-project(dung)
+project(dung C)
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS true)
+
+set(CMAKE_C_STANDARD 11)
 
 include(FetchContent)
 

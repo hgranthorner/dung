@@ -1,5 +1,6 @@
 #include "SDL3/SDL_gpu.h"
 #include "SDL3/SDL_scancode.h"
+#include <assert.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -12,7 +13,6 @@
 #include "camera.h"
 #include "constants.h"
 #include "pipeline.h"
-#include "sdl_utils.h"
 
 int main() {
     if (!SDL_Init(SDL_INIT_VIDEO)) {
@@ -22,32 +22,21 @@ int main() {
 
     SDL_Window *window = NULL;
     window = SDL_CreateWindow("Dung", SCREEN_WIDTH, SCREEN_HEIGHT, 0);
-    CHECK(window);
+    assert(window);
 
     SDL_GPUDevice *device = SDL_CreateGPUDevice(SDL_GPU_SHADERFORMAT_MSL, true, NULL);
-    CHECK(device);
+    assert(device);
 
     const char *device_driver = SDL_GetGPUDeviceDriver(device);
     CHECK(device_driver);
 
     CHECK(SDL_ClaimWindowForGPUDevice(device, window));
 
-    Pipeline pipeline;
-    renderer_init(&pipeline, window, device);
+    Pipeline cube_pipeline;
+    cube_pipeline_init(&cube_pipeline, window, device);
 
-    VectorInput *vertex_data = malloc(VerticesSize);
-    map_buffer(device, pipeline.vertex_buffer, vertex_data, VerticesSize);
-    for (size_t i = 0; i < VerticesCount; i++) {
-        printf("Vertex #%zu: x=%f, y=%f\n", i, vertex_data[i].position[0], vertex_data[i].position[1]);
-    }
-    free(vertex_data);
-
-    uint16_t *indices_data = malloc(IndicesSize);
-    map_buffer(device, pipeline.index_buffer, indices_data, IndicesSize);
-    for (size_t i = 0; i < IndicesCount; i++) {
-        printf("Index #%zu: %d\n", i, indices_data[i]);
-    }
-    free(indices_data);
+    // Pipeline floor_tile_pipeline;
+    // floor_tile_pipeline_init(&floor_tile_pipeline, window, device);
 
     // finish loading data
 
@@ -57,8 +46,10 @@ int main() {
     SDL_Event e;
     uint64_t now, previous, last_frame_time = SDL_GetTicks();
     const bool *keyboard_state = SDL_GetKeyboardState(NULL);
+    /* init gui state */
 
     while (running) {
+
         uint64_t ts = now - previous;
 
         if (keyboard_state[SDL_SCANCODE_D])
@@ -130,12 +121,14 @@ int main() {
             CHECK(render_pass);
 
             SDL_PushGPUVertexUniformData(cmdbuf, 0, camera.mvp, sizeof(mat4));
-            SDL_BindGPUGraphicsPipeline(render_pass, pipeline.pipeline);
+            SDL_BindGPUGraphicsPipeline(render_pass, cube_pipeline.pipeline);
             SDL_BindGPUVertexBuffers(render_pass, 0,
-                                     &(SDL_GPUBufferBinding){.buffer = pipeline.vertex_buffer, .offset = 0}, 1);
-            SDL_BindGPUIndexBuffer(render_pass, &(SDL_GPUBufferBinding){.buffer = pipeline.index_buffer, .offset = 0},
+                                     &(SDL_GPUBufferBinding){.buffer = cube_pipeline.vertex_buffer, .offset = 0}, 1);
+            SDL_BindGPUIndexBuffer(render_pass,
+                                   &(SDL_GPUBufferBinding){.buffer = cube_pipeline.index_buffer, .offset = 0},
                                    SDL_GPU_INDEXELEMENTSIZE_16BIT);
-            SDL_DrawGPUIndexedPrimitives(render_pass, IndicesCount, IndicesCount, 0, 0, 0);
+            SDL_DrawGPUIndexedPrimitives(render_pass, cube_pipeline.indices_count, cube_pipeline.indices_count, 0, 0,
+                                         0);
             SDL_EndGPURenderPass(render_pass);
 
             CHECK(SDL_SubmitGPUCommandBuffer(cmdbuf));
