@@ -7,6 +7,9 @@
 
 #include <cglm/cglm.h>
 
+#include <cimgui.h>
+#include <cimgui_impl.h>
+
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_video.h>
 
@@ -32,6 +35,25 @@ int main() {
 
     CHECK(SDL_ClaimWindowForGPUDevice(device, window));
 
+    // setup imgui
+    igCreateContext(NULL);
+
+    // set docking
+    ImGuiIO *ioptr = igGetIO_Nil();
+    ioptr->ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard; // Enable Keyboard Controls
+    // ioptr->ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;      // Enable Gamepad Controls
+#ifdef IMGUI_HAS_DOCK
+    ioptr->ConfigFlags |= ImGuiConfigFlags_DockingEnable;   // Enable Docking
+    ioptr->ConfigFlags |= ImGuiConfigFlags_ViewportsEnable; // Enable Multi-Viewport / Platform Windows
+#endif
+
+    assert(ImGui_ImplSDL3_InitForSDLGPU(window));
+    assert(ImGui_ImplSDLGPU3_Init(&(ImGui_ImplSDLGPU3_InitInfo){
+        .ColorTargetFormat = SDL_GetGPUSwapchainTextureFormat(device, window),
+        .Device = device,
+        .MSAASamples = SDL_GPU_SAMPLECOUNT_1,
+    }));
+
     Pipeline cube_pipeline;
     cube_pipeline_init(&cube_pipeline, window, device);
 
@@ -46,7 +68,7 @@ int main() {
     SDL_Event e;
     uint64_t now, previous, last_frame_time = SDL_GetTicks();
     const bool *keyboard_state = SDL_GetKeyboardState(NULL);
-    /* init gui state */
+    bool demo_window_open = true;
 
     while (running) {
 
@@ -71,6 +93,7 @@ int main() {
             camera_strafe(&camera, CAMERA_DIRECTION_RIGHT, ts);
 
         while (SDL_PollEvent(&e)) {
+            ImGui_ImplSDL3_ProcessEvent(&e);
             switch (e.type) {
             case SDL_EVENT_KEY_DOWN: {
                 switch (e.key.scancode) {
@@ -92,6 +115,14 @@ int main() {
         now = SDL_GetTicks();
         if (now - last_frame_time >= SCREEN_TICKS_PER_FRAME) {
             last_frame_time = now;
+
+            ImGui_ImplSDLGPU3_NewFrame();
+            ImGui_ImplSDL3_NewFrame();
+            igNewFrame();
+
+            igShowDemoWindow(&demo_window_open);
+
+            igRender();
 
             SDL_GPUCommandBuffer *cmdbuf = SDL_AcquireGPUCommandBuffer(device);
             if (cmdbuf == NULL) {
@@ -117,6 +148,9 @@ int main() {
             color_target_info.load_op = SDL_GPU_LOADOP_CLEAR;
             color_target_info.store_op = SDL_GPU_STOREOP_STORE;
 
+            ImDrawData *imgui_draw_data = igGetDrawData();
+            Imgui_ImplSDLGPU3_PrepareDrawData(imgui_draw_data, cmdbuf);
+
             SDL_GPURenderPass *render_pass = SDL_BeginGPURenderPass(cmdbuf, &color_target_info, 1, NULL);
             CHECK(render_pass);
 
@@ -129,8 +163,10 @@ int main() {
                                    SDL_GPU_INDEXELEMENTSIZE_16BIT);
             SDL_DrawGPUIndexedPrimitives(render_pass, cube_pipeline.indices_count, cube_pipeline.indices_count, 0, 0,
                                          0);
-            SDL_EndGPURenderPass(render_pass);
 
+            ImGui_ImplSDLGPU3_RenderDrawData(imgui_draw_data, cmdbuf, render_pass, NULL);
+
+            SDL_EndGPURenderPass(render_pass);
             CHECK(SDL_SubmitGPUCommandBuffer(cmdbuf));
         }
     }
