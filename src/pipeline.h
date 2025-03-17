@@ -20,3 +20,4 @@ typedef struct {
 
 void cube_pipeline_init(Pipeline *pipeline, SDL_Window *window, SDL_GPUDevice *device);
 void floor_tile_pipeline_init(Pipeline *pipeline, SDL_Window *window, SDL_GPUDevice *device);
+void pipeline_render(Pipeline *pipeline, SDL_GPURenderPass *render_pass);

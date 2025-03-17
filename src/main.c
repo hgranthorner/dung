@@ -57,8 +57,8 @@ int main() {
     Pipeline cube_pipeline;
     cube_pipeline_init(&cube_pipeline, window, device);
 
-    // Pipeline floor_tile_pipeline;
-    // floor_tile_pipeline_init(&floor_tile_pipeline, window, device);
+    Pipeline floor_tile_pipeline;
+    floor_tile_pipeline_init(&floor_tile_pipeline, window, device);
 
     // finish loading data
 
@@ -69,6 +69,8 @@ int main() {
     uint64_t now, previous, last_frame_time = SDL_GetTicks();
     const bool *keyboard_state = SDL_GetKeyboardState(NULL);
     bool demo_window_open = true;
+    bool show_cube = true;
+    bool show_tiles = true;
 
     while (running) {
 
@@ -120,7 +122,12 @@ int main() {
             ImGui_ImplSDL3_NewFrame();
             igNewFrame();
 
-            igShowDemoWindow(&demo_window_open);
+            {
+                igBegin("Debug", &demo_window_open, 0);
+                igCheckbox("Show Cube", &show_cube);
+                igCheckbox("Show Tiles", &show_tiles);
+                igEnd();
+            }
 
             igRender();
 
@@ -155,14 +162,13 @@ int main() {
             CHECK(render_pass);
 
             SDL_PushGPUVertexUniformData(cmdbuf, 0, camera.mvp, sizeof(mat4));
-            SDL_BindGPUGraphicsPipeline(render_pass, cube_pipeline.pipeline);
-            SDL_BindGPUVertexBuffers(render_pass, 0,
-                                     &(SDL_GPUBufferBinding){.buffer = cube_pipeline.vertex_buffer, .offset = 0}, 1);
-            SDL_BindGPUIndexBuffer(render_pass,
-                                   &(SDL_GPUBufferBinding){.buffer = cube_pipeline.index_buffer, .offset = 0},
-                                   SDL_GPU_INDEXELEMENTSIZE_16BIT);
-            SDL_DrawGPUIndexedPrimitives(render_pass, cube_pipeline.indices_count, cube_pipeline.indices_count, 0, 0,
-                                         0);
+
+            if (show_cube) {
+                pipeline_render(&cube_pipeline, render_pass);
+            }
+            if (show_tiles) {
+                pipeline_render(&floor_tile_pipeline, render_pass);
+            }
 
             ImGui_ImplSDLGPU3_RenderDrawData(imgui_draw_data, cmdbuf, render_pass, NULL);
 
