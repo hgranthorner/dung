@@ -3,12 +3,12 @@
 #include "constants.h"
 #include "sdl_utils.h"
 #include <assert.h>
-#include <math.h>
 #include <stdint.h>
+#include <stdlib.h>
 
 void cube_pipeline_init(Pipeline *pipeline, SDL_Window *window, SDL_GPUDevice *device) {
 
-    static VectorInput CubeVertices[] = {
+    static Vertex CubeVertices[] = {
         // 0 fbl
         {{25, 25, 25, 1.0}, {1.0, 0.0, 0.0, 1.0}},
         // 1 ftl
@@ -27,7 +27,7 @@ void cube_pipeline_init(Pipeline *pipeline, SDL_Window *window, SDL_GPUDevice *d
         // 7 btl
         {{75, 75, -25, 1.0}, {1.0, 1.0, 0.0, 1.0}},
     };
-    const size_t VerticesCount = sizeof(CubeVertices) / sizeof(VectorInput);
+    const size_t VerticesCount = sizeof(CubeVertices) / sizeof(Vertex);
     const size_t VerticesSize = sizeof(CubeVertices);
 
     // clang-format off
@@ -71,7 +71,7 @@ void cube_pipeline_init(Pipeline *pipeline, SDL_Window *window, SDL_GPUDevice *d
                     (SDL_GPUVertexBufferDescription[]){
                         {
                             .slot = 0,
-                            .pitch = sizeof(VectorInput),
+                            .pitch = sizeof(Vertex),
                             .input_rate = SDL_GPU_VERTEXINPUTRATE_VERTEX,
                             .instance_step_rate = 0,
                         },
@@ -127,7 +127,7 @@ void cube_pipeline_init(Pipeline *pipeline, SDL_Window *window, SDL_GPUDevice *d
                                                     .usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD,
                                                     .size = VerticesSize + CubeIndicesSize,
                                                 });
-        VectorInput *vertex_data = SDL_MapGPUTransferBuffer(device, transfer, false);
+        Vertex *vertex_data = SDL_MapGPUTransferBuffer(device, transfer, false);
         memcpy(vertex_data, CubeVertices, VerticesSize);
         uint16_t *index_data = (uint16_t *)&vertex_data[VerticesCount];
         memcpy(index_data, CubeIndices, CubeIndicesSize);
@@ -187,7 +187,7 @@ void floor_tile_pipeline_init(Pipeline *pipeline, SDL_Window *window, SDL_GPUDev
                     (SDL_GPUVertexBufferDescription[]){
                         {
                             .slot = 0,
-                            .pitch = sizeof(VectorInput),
+                            .pitch = sizeof(Vertex),
                             .input_rate = SDL_GPU_VERTEXINPUTRATE_VERTEX,
                             .instance_step_rate = 0,
                         },
@@ -226,35 +226,42 @@ void floor_tile_pipeline_init(Pipeline *pipeline, SDL_Window *window, SDL_GPUDev
 
     vec4 white = {COLOR_WHITE.r, COLOR_WHITE.g, COLOR_WHITE.b, COLOR_WHITE.a};
 
-#define NUM_SQUARES 100
-    const size_t tiles_per_row = 20;
-    assert(NUM_SQUARES % tiles_per_row == 0);
-    const size_t num_rows = NUM_SQUARES / tiles_per_row;
+#define NUM_VERTICES 256
+#define VERTICES_PER_ROW sqrt(NUM_VERTICES);
+    const size_t vertices_per_row = sqrt(NUM_VERTICES);
+    assert(vertices_per_row * vertices_per_row == NUM_VERTICES);
 
-    static VectorInput tile_data[NUM_SQUARES * 2 + 2];
+    static Vertex tile_data[NUM_VERTICES];
+
+    // A grid graph G_(m,n) has mn nodes and (m-1)n+(n-1)m=2mn-m-n edges
+    size_t num_indices = 2 * pow(vertices_per_row, 2) - 2 * vertices_per_row * 2;
+    uint16_t *tile_indices = malloc(sizeof(uint16_t) * num_indices);
+
+    /*
+     * Nodes: 9
+     * Edges: 12
+     * 24
+     * +-+-+
+     * | | |
+     * +-+-+
+     * | | |
+     * +-+-+
+     */
 
     float start = -100;
     float step = 20;
-    tile_data[0] = (VectorInput){{start, 0, start, 1}, {}};
-    tile_data[1] = (VectorInput){{start + step, 0, start, 1}, {}};
-    static uint16_t tile_indices[NUM_SQUARES * 6 + 2] = {0};
-    tile_indices[0] = 0;
-    tile_indices[1] = 1;
-    for (size_t square = 0; square < NUM_SQUARES; square++) {
-        size_t row = tiles_per_row / square;
-        float z = (square + 1) * step + start;
-        tile_data[square * 2 + 2] = (VectorInput){.position = {start, 0, z, 1}};
-        glm_vec4_copy(white, tile_data[square * 2 + 2].color);
-        tile_data[square * 2 + 3] = (VectorInput){.position = {start + step, 0, z, 1}};
-        glm_vec4_copy(white, tile_data[square * 2 + 3].color);
-        {
-            size_t i = square * 6 + 2;
-            tile_indices[i + 0] = square * 2 + 1;
-            tile_indices[i + 1] = square * 2 + 3;
-            tile_indices[i + 2] = square * 2 + 3;
-            tile_indices[i + 3] = square * 2 + 2;
-            tile_indices[i + 4] = square * 2 + 2;
-            tile_indices[i + 5] = square * 2 + 0;
+
+    for (size_t x = 0; x < vertices_per_row; x++) {
+        for (size_t z = 0; z < vertices_per_row; z++) {
+            tile_data[x * vertices_per_row + z] = (Vertex){
+                {x * step + start, 0, z * step + start, 1},
+                {COLOR_WHITE.r, COLOR_WHITE.g, COLOR_WHITE.b, COLOR_WHITE.a},
+            };
+        }
+    }
+
+    for (size_t x = 0; x < vertices_per_row; x++) {
+        for (size_t z = 0; z < vertices_per_row - 1; z++) {
         }
     }
 
@@ -288,15 +295,15 @@ void floor_tile_pipeline_init(Pipeline *pipeline, SDL_Window *window, SDL_GPUDev
     // };
     // clang-format on
     //
-    size_t tiles_count = sizeof(tile_data) / sizeof(VectorInput);
+    size_t tiles_count = sizeof(tile_data) / sizeof(Vertex);
     for (size_t i = 0; i < tiles_count; i++) {
         glm_vec4_copy(white, tile_data[i].color);
     }
 
     pipeline->vertices_count = tiles_count;
-    const size_t TileVerticesSize = sizeof(VectorInput) * pipeline->vertices_count;
+    const size_t TileVerticesSize = sizeof(Vertex) * pipeline->vertices_count;
 
-    pipeline->indices_count = sizeof(tile_indices) / sizeof(uint16_t);
+    pipeline->indices_count = num_indices;
     const size_t TileIndicesSize = sizeof(uint16_t) * pipeline->indices_count;
 
     pipeline->vertex_buffer = SDL_CreateGPUBuffer(
@@ -313,7 +320,7 @@ void floor_tile_pipeline_init(Pipeline *pipeline, SDL_Window *window, SDL_GPUDev
                                                     .usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD,
                                                     .size = TileVerticesSize + TileIndicesSize,
                                                 });
-        VectorInput *vertex_data = SDL_MapGPUTransferBuffer(device, transfer, false);
+        Vertex *vertex_data = SDL_MapGPUTransferBuffer(device, transfer, false);
 
         memcpy(vertex_data, tile_data, TileVerticesSize);
         uint16_t *index_data = (uint16_t *)&vertex_data[pipeline->vertices_count];

@@ -39,7 +39,7 @@ int main() {
     igCreateContext(NULL);
 
     // set docking
-    ImGuiIO *ioptr = igGetIO_Nil();
+    ImGuiIO *ioptr = igGetIO();
     ioptr->ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard; // Enable Keyboard Controls
     // ioptr->ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;      // Enable Gamepad Controls
 #ifdef IMGUI_HAS_DOCK

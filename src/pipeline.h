@@ -6,13 +6,13 @@
 
 typedef struct {
     vec4 position, color;
-} VectorInput;
+} Vertex;
 
 typedef struct {
     SDL_GPUGraphicsPipeline *pipeline;
     SDL_GPUBuffer *vertex_buffer;
     SDL_GPUBuffer *index_buffer;
-    VectorInput *vertices;
+    Vertex *vertices;
     size_t vertices_count;
     uint16_t *indices;
     size_t indices_count;

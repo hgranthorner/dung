@@ -18,8 +18,9 @@ FetchContent_Declare(
 
 FetchContent_Declare(
 	cimgui
-	GIT_REPOSITORY https://github.com/hgranthorner/cimgui.git 
-	GIT_TAG origin/add_sdlgpu3_backend
+	EXCLUDE_FROM_ALL
+	GIT_REPOSITORY https://github.com/cimgui/cimgui.git 
+	GIT_HASH 140d107
 	GIT_SUBMODULES_RECURSE true
 	GIT_PROGRESS true
 	GIT_SHALLOW true
@@ -27,16 +28,32 @@ FetchContent_Declare(
 
 FetchContent_MakeAvailable(cimgui sdl3 cglm)
 
-add_library(
-	cimgui_sdlgpu3_backend 
-	SHARED 
+file(READ ${cimgui_SOURCE_DIR}/generator/output/cimgui_impl.h cimgui_impl)
+string(FIND "${cimgui_impl}" "SDLGPU3" sdlgpu_position)
+message("Found: ${sdlgpu_position}")
+if(sdlgpu_position EQUAL -1)
+	execute_process(
+		COMMAND luajit generator.lua clang internal sdl3 sdlgpu3 -I../imgui -I${sdl3_SOURCE_DIR}/include
+		WORKING_DIRECTORY ${cimgui_SOURCE_DIR}/generator
+	)
+endif()
+
+add_library(cimgui_with_backends SHARED 
+	${cimgui_SOURCE_DIR}/cimgui.cpp
+	${cimgui_SOURCE_DIR}/imgui/imgui.cpp
+	${cimgui_SOURCE_DIR}/imgui/imgui_draw.cpp
+	${cimgui_SOURCE_DIR}/imgui/imgui_demo.cpp
+	${cimgui_SOURCE_DIR}/imgui/imgui_widgets.cpp
+	${cimgui_SOURCE_DIR}/imgui/imgui_tables.cpp
 	${cimgui_SOURCE_DIR}/imgui/backends/imgui_impl_sdl3.cpp
 	${cimgui_SOURCE_DIR}/imgui/backends/imgui_impl_sdlgpu3.cpp
 )
-target_include_directories(cimgui_sdlgpu3_backend PRIVATE ${cimgui_SOURCE_DIR}/imgui)
-target_compile_features(cimgui_sdlgpu3_backend PRIVATE cxx_std_11)
-target_link_libraries(cimgui_sdlgpu3_backend PRIVATE SDL3::SDL3 cimgui)
-target_compile_definitions(cimgui_sdlgpu3_backend PUBLIC IMGUI_IMPL_API=extern\t\"C\"\t)
+
+target_include_directories(cimgui_with_backends PUBLIC ${cimgui_SOURCE_DIR} ${cimgui_SOURCE_DIR}/generator/output)
+target_include_directories(cimgui_with_backends PRIVATE ${cimgui_SOURCE_DIR}/imgui ${cimgui_SOURCE_DIR}/imgui/backends)
+target_compile_definitions(cimgui_with_backends PRIVATE "-DIMGUI_IMPL_API=extern\t\"C\"\t")
+target_compile_features(cimgui_with_backends PRIVATE cxx_std_11)
+target_link_libraries(cimgui_with_backends PRIVATE SDL3::SDL3)
 
 add_executable(${PROJECT_NAME} 
 	src/main.c
@@ -47,7 +64,7 @@ add_executable(${PROJECT_NAME}
 )
 
 target_include_directories(${PROJECT_NAME} PRIVATE ${cimgui_SOURCE_DIR}/generator/output)
-target_link_libraries(${PROJECT_NAME} PRIVATE SDL3::SDL3 cglm cimgui cimgui_sdlgpu3_backend)
+target_link_libraries(${PROJECT_NAME} PRIVATE SDL3::SDL3 cglm cimgui_with_backends)
 target_compile_definitions(
 	${PROJECT_NAME}
 	PRIVATE 
